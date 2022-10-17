@@ -1,10 +1,11 @@
 #[cfg(test)]
 mod integration {
+    use std::collections::HashMap;
+    use std::convert::TryFrom;
+    use std::env;
+    use std::process::Command;
+    use std::thread::sleep;
     use std::time::Duration;
-    use std::{
-        env,
-        process::Command,
-    };
 
     use bip78::bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
     use bip78::{PjUriExt, UriExt};
@@ -13,63 +14,74 @@ mod integration {
     use ln_types::P2PAddress;
     use loin::scheduler;
     use loin::{scheduler::{ScheduledChannel, ScheduledPayJoin, Scheduler}, lnd::LndClient, http};
-    use std::collections::HashMap;
-    use std::convert::TryFrom;
     use tempfile::tempdir;
     use tonic_lnd::rpc::{ConnectPeerRequest, LightningAddress};
     use hyper_tls::HttpsConnector;
     use tokio_native_tls::native_tls;
 
+    fn do_event() -> Result<bitcoincore_rpc::Client, bitcoincore_rpc::Error> {
+        Client::new("http://localhost:43782", Auth::UserPass("ceiwHEbqWI83".to_string(), "DwubwWsoo3".to_string()))
+    }
     #[tokio::test]
     async fn test() -> Result<(), Box<dyn std::error::Error>> {
         let localhost = vec!["localhost".to_string()];
         let cert = rcgen::generate_simple_self_signed(localhost)?;
         let ssl_dir = format!("{}/tests/compose/nginx/ssl", env!("CARGO_MANIFEST_DIR"));
-        std::fs::write(format!("{}/localhost-key.pem", ssl_dir), cert.serialize_private_key_pem()).expect("unable to write file");
-        std::fs::write(format!("{}/localhost.pem", ssl_dir), cert.serialize_pem()?).expect("unable to write file");
+        std::fs::write(format!("{}/localhost-key.pem", ssl_dir), cert.serialize_private_key_pem())
+            .expect("unable to write file");
+        std::fs::write(format!("{}/localhost.pem", ssl_dir), cert.serialize_pem()?)
+            .expect("unable to write file");
 
         let compose_dir = format!("{}/tests/compose", env!("CARGO_MANIFEST_DIR"));
         let fixture = Fixture::new(compose_dir);
         let tmp_path = fixture.tmp_path();
 
         // wait for bitcoind to start and for lnd to be fully initialized with secrets
-        std::thread::sleep(std::time::Duration::from_secs(10));
 
         // sanity check
-        let bitcoin_rpc = Client::new(
-            "http://localhost:43782",
-            Auth::UserPass("ceiwHEbqWI83".to_string(), "DwubwWsoo3".to_string()),
-        )
-        .unwrap();
-        assert!(&bitcoin_rpc.get_best_block_hash().is_ok());
-
-        Command::new("docker")
-            .arg("cp")
-            .arg("compose-merchant_lnd-1:/root/.lnd/tls.cert")
-            .arg(format!("{}/merchant-tls.cert", tmp_path))
-            .output()
-            .expect("failed to copy tls.cert");
-        println!("copied merchant-tls.cert");
-
-        Command::new("docker")
-            .arg("cp")
-            .arg("compose-merchant_lnd-1:/data/chain/bitcoin/regtest/admin.macaroon")
-            .arg(format!("{}/merchant-admin.macaroon", &tmp_path))
-            .output()
-            .expect("failed to copy admin.macaroon");
-        println!("copied merchant-admin.macaroon");
+        let bitcoin_rpc = loop {
+            if let Ok(btcrpc) = do_event() {
+                if btcrpc.get_best_block_hash().is_ok() {
+                    break btcrpc;
+                }
+            }
+            sleep(std::time::Duration::from_secs(1));
+        };
 
         // merchant lnd loin configuration
         let address_str = "https://localhost:53281";
         let cert_file = format!("{}/merchant-tls.cert", &tmp_path).to_string();
         let macaroon_file = format!("{}/merchant-admin.macaroon", &tmp_path).to_string();
 
-        // Connecting to LND requires only address, cert file, and macaroon file
-        let mut merchant_client =
-            tonic_lnd::connect(address_str, &cert_file, &macaroon_file).await.unwrap();
+        let mut merchant_client = loop {
+            sleep(Duration::from_secs(1));
+            // wait for lnd ready 
+            Command::new("docker")
+            .arg("cp")
+            .arg("compose-merchant_lnd-1:/root/.lnd/tls.cert")
+            .arg(format!("{}/merchant-tls.cert", tmp_path))
+            .output()
+            .expect("failed to copy tls.cert");
+            println!("copied merchant-tls.cert");
 
-        // Just test the node rpc
-        merchant_client.get_info(tonic_lnd::rpc::GetInfoRequest {}).await.unwrap();
+            Command::new("docker")
+                .arg("cp")
+                .arg("compose-merchant_lnd-1:/data/chain/bitcoin/regtest/admin.macaroon")
+                .arg(format!("{}/merchant-admin.macaroon", &tmp_path))
+                .output()
+                .expect("failed to copy admin.macaroon");
+            println!("copied merchant-admin.macaroon");
+
+            // Connecting to LND requires only address, cert file, and macaroon file
+            let client =
+                tonic_lnd::connect(address_str, &cert_file, &macaroon_file).await;
+                
+            if let Ok(mut client) = client {
+                if client.get_info(tonic_lnd::rpc::GetInfoRequest {}).await.is_ok() {
+                    break client;
+                }
+            }
+        };
 
         // conf to merchant
         let endpoint: url::Url = "https://localhost:3010".parse().expect("not a valid Url");
@@ -144,11 +156,28 @@ mod integration {
         let bip21 = scheduler::format_bip21(address, pj.total_amount(), endpoint.clone());
         println!("{}", &bip21);
 
+
+
+        let loop_til_open_channel = tokio::spawn(async move {
+            let channel_update = peer_client.subscribe_channel_events(tonic_lnd::rpc::ChannelEventSubscription {});
+            let mut res = channel_update.await.unwrap().into_inner();
+            loop {
+                if let Ok(Some(channel_event)) = res.message().await {
+                    if channel_event.r#type() == tonic_lnd::rpc::channel_event_update::UpdateType::OpenChannel {
+                        break; 
+                    }
+                }
+            };
+        });
+
         let bind_addr = ([127, 0, 0, 1], 3000).into();
+        let loin_server = http::serve(scheduler, bind_addr, endpoint.clone());
+
         // trigger payjoin-client
         let payjoin_channel_open = tokio::spawn(async move {
             // if we don't wait for loin server to run we'll make requests to a closed port
             std::thread::sleep(std::time::Duration::from_secs(2));
+            // TODO loop on ping 3000 until it the server is live
 
             let link = bip78::Uri::try_from(bip21).expect("bad bip78 uri");
 
@@ -178,14 +207,18 @@ mod integration {
                 )
                 .expect("failed to create PSBT")
                 .psbt;
-            let psbt = bitcoin_rpc.wallet_process_psbt(&psbt, None, None, None).expect("bitcoind failed to fund psbt").psbt;
+            let psbt = bitcoin_rpc
+                .wallet_process_psbt(&psbt, None, None, None)
+                .expect("bitcoind failed to fund psbt")
+                .psbt;
             let psbt = load_psbt_from_base64(psbt.as_bytes()).expect("bad psbt bytes");
             println!("Original psbt: {:#?}", psbt);
             let pj_params = bip78::sender::Configuration::with_fee_contribution(
                 bip78::bitcoin::Amount::from_sat(10000),
                 None,
             );
-            let (req, ctx) = link.create_pj_request(psbt, pj_params).expect("failed to make http pj request");
+            let (req, ctx) =
+                link.create_pj_request(psbt, pj_params).expect("failed to make http pj request");
             let url = req.url.to_string().parse::<hyper::Uri>().unwrap();
             let request = hyper::Request::builder()
                 .method(hyper::Method::POST)
@@ -197,7 +230,8 @@ mod integration {
             let mut http = HttpConnector::new();
             http.enforce_http(false);
             let mut tls = native_tls::TlsConnector::builder();
-            let tls_cert = native_tls::Certificate::from_der(&cert.serialize_der().unwrap()).unwrap();
+            let tls_cert =
+                native_tls::Certificate::from_der(&cert.serialize_der().unwrap()).unwrap();
             tls.add_root_certificate(tls_cert);
             tls.danger_accept_invalid_certs(true);
             let tls = tls.build().unwrap();
@@ -206,22 +240,26 @@ mod integration {
             let client = hyper::Client::builder().build(ct);
             let response = client.request(request).await.expect("failed to get http pj response");
             println!("res: {:#?}", response);
-            let response = hyper::body::to_bytes(response.into_body()).await.expect("failed to deserialize response");
+            let response = hyper::body::to_bytes(response.into_body())
+                .await
+                .expect("failed to deserialize response");
             println!("res: {:#?}", response);
 
-            let psbt = ctx.process_response(response.to_vec().as_slice()).expect("failed to process response");
+            let psbt = ctx
+                .process_response(response.to_vec().as_slice())
+                .expect("failed to process response");
             println!("Proposed psbt: {:#?}", psbt);
-            let psbt =
-            bitcoin_rpc.wallet_process_psbt(&serialize_psbt(&psbt), None, None, None).unwrap().psbt;
-            let tx = bitcoin_rpc.finalize_psbt(&psbt, Some(true)).unwrap().hex.expect("incomplete psbt");
+            let psbt = bitcoin_rpc
+                .wallet_process_psbt(&serialize_psbt(&psbt), None, None, None)
+                .unwrap()
+                .psbt;
+            let tx =
+                bitcoin_rpc.finalize_psbt(&psbt, Some(true)).unwrap().hex.expect("incomplete psbt");
             bitcoin_rpc.send_raw_transaction(&tx).unwrap();
 
-            // Open channel on newly created payjoin
+            // Confirm the newly opene transaction in new blocks
             bitcoin_rpc.generate_to_address(8, &source_address).unwrap();
-            std::thread::sleep(Duration::from_secs(1));
         });
-
-        let loin_server = http::serve(scheduler, bind_addr, endpoint.clone());
 
         tokio::select! {
             _ = payjoin_channel_open => println!("payjoin-client completed first"),
@@ -229,12 +267,11 @@ mod integration {
             _ = tokio::time::sleep(std::time::Duration::from_secs(20)) => println!("payjoin timed out after 20 seconds"),
         };
 
-        let bal_res = peer_client.channel_balance(tonic_lnd::rpc::ChannelBalanceRequest::default()).await?;
-        println!("{:?}",bal_res);
-        let merchant_side_channel_balance = bal_res.into_inner().remote_balance.unwrap().sat;
-        println!("{:?}",merchant_side_channel_balance);
+        tokio::select! {
+            _ = loop_til_open_channel => println!("Channel opened!"),
+            _ = tokio::time::sleep(std::time::Duration::from_secs(6)) => println!("Channel open upate listener timed out"),
+        };
 
-        assert!(merchant_side_channel_balance != 0);
         Ok(())
     }
     struct Fixture {
@@ -255,15 +292,10 @@ mod integration {
 
             let tmp_dir = tempdir().expect("Couldn't open tmp_dir");
 
-            Fixture {
-                compose_dir,
-                tmp_dir,
-            }
+            Fixture { compose_dir, tmp_dir }
         }
 
-        fn tmp_path(&self) -> &str {
-            self.tmp_dir.path().to_str().expect("Invalid tmp_dir path")
-        }
+        fn tmp_path(&self) -> &str { self.tmp_dir.path().to_str().expect("Invalid tmp_dir path") }
     }
 
     impl Drop for Fixture {
