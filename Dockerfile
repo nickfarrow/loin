@@ -46,7 +46,7 @@ RUN echo "Called build!"
 
 # Run loin
 FROM debian:buster-slim
-COPY --from=chosen_builder /usr/local/cargo/bin/loin /home/ 
-USER 1000
+COPY --from=chosen_builder /usr/local/cargo/bin/loin /usr/local/bin/loin
+EXPOSE 4444
 # We should also use: $APP_HIDDEN_SERVICE
-CMD ["/home/loin", "--bind_port", "4444", "--lnd_address=$LND_HOST:$LND_GRPC_PORT", "--lnd_cert_path=$TLS_FILE", "--lnd_macaroon_path=$MACAROON_FILE"]
+CMD ["loin", "--bind_port", "4444", "--lnd_address=$LND_HOST:$LND_GRPC_PORT", "--lnd_cert_path=$TLS_FILE", "--lnd_macaroon_path=$MACAROON_FILE"]
