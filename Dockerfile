@@ -17,12 +17,12 @@ ENV RUSTFLAGS="-Z macro-backtrace"
 ENV RUST_BACKTRACE=1
 # Copy the required build files. In this case, these are all the files that
 # are used for both architectures.
-WORKDIR /usr/src/loin
+WORKDIR /usr/src/loin/
 COPY Cargo.toml Cargo.lock build.rs config_spec.toml ./
-COPY src ./src
-COPY static ./static
-COPY node_modules ./node_modules
-COPY run_loin ./run_loin
+COPY src/ ./src/
+COPY static/ ./static/
+COPY node_modules/ ./node_modules/
+# COPY run_loin ./run_loin
 
 ## x86_64
 FROM builder AS branch-version-amd64
