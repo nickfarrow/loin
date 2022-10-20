@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Create loin config (should pass as args later)
+CONF=loin.conf
+if [ ! -f $CONF ]
+then
+    touch $CONF
+    echo "bind_port=4444" >> $CONF
+    echo "lnd_address=\"https://10.21.21.9:$LND_GRPC_PORT\"" >> $CONF
+    echo "lnd_cert_path=\"$TLS_FILE\"" >> $CONF
+    echo "lnd_macaroon_path=\"$MACAROON_FILE\"" >> $CONF
+
+    echo "$LND_HOST lndhost" >> /etc/hosts
+fi
+
+cat loin.conf
+loin --conf loin.conf

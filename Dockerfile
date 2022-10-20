@@ -1,52 +1,62 @@
-# Multistage Build for Loin (x86_64 or ARM)
+# Multistage Build for Loin
+#
+# x86_64-unknown-linux-musl
+# aarch64-unknown-linux-musl
 #
 # Conditionally `cargo build` for platforms of x86_64 or ARM.
+# Use musl for static linking, producing a standalone executable with no dependencies.
 # In the final Docker stage we copy the built binary to alpine, and run with environment:
 # $LND_HOST, $LND_GRPC_PORT, $TLS_FILE, $MACAROON_FILE"
 
-# Initial build Stage 
-# use nightly-slim?
+## Initial build Stage 
 FROM rustlang/rust:nightly AS builder
+# Target architecture argument used to change build
 ARG TARGETARCH
+# Some nicer rust debugging
 ENV RUSTFLAGS="-Z macro-backtrace"
 ENV RUST_BACKTRACE=1
+# Copy the required build files. In this case, these are all the files that
+# are used for both architectures.
 WORKDIR /usr/src/loin
 COPY Cargo.toml Cargo.lock build.rs config_spec.toml ./
 COPY src ./src
 COPY static ./static
 COPY node_modules ./node_modules
+COPY run_loin ./run_loin
 
-# x86_64
+## x86_64
 FROM builder AS branch-version-amd64
 RUN echo "Preparing to cargo build for x86_64 (${TARGETARCH})"
+# Install the required dependencies to build for `musl` static linking
 RUN apt-get update && apt-get install -y musl-tools musl-dev
+# Add our x86 target to rust, then compile and install
 RUN rustup target add x86_64-unknown-linux-musl
 RUN cargo install --features=test_paths --target x86_64-unknown-linux-musl --path .
 
 # ARM
 FROM builder AS branch-version-arm64
 RUN echo "Preparing to cargo build for arm (${TARGETARCH})"
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    g++-arm-linux-gnueabihf \
-    libc6-dev-armhf-cross
-RUN rustup target add armv7-unknown-linux-gnueabihf
-ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
-    CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_RUNNER="/linux-runner armv7hf" \
-    CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc \
-    CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++ \
-    BINDGEN_EXTRA_CLANG_ARGS_armv7_unknown_linux_gnueabihf="--sysroot=/usr/arm-linux-gnueabihf" \
-    QEMU_LD_PREFIX=/usr/arm-linux-gnueabihf \
-    RUST_TEST_THREADS=1 \
-    PKG_CONFIG_PATH="/usr/lib/arm-linux-gnueabihf/pkgconfig/:${PKG_CONFIG_PATH}"
-RUN cargo install --features=test_paths --target armv7-unknown-linux-gnueabihf --path .
+# Install the required dependencies to build for `musl` static linking for arm.
+RUN apt-get update && apt-get install musl-tools clang llvm -y 
+# Add our arm target to rust, some build variables, then compile and install
+RUN rustup target add aarch64-unknown-linux-musl
+ENV CC_aarch64_unknown_linux_musl=clang
+ENV AR_aarch64_unknown_linux_musl=llvm-ar
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"
+RUN cargo install --features=test_paths --target aarch64-unknown-linux-musl --path .
 
-# We want to build for either x86_64 or ARM using the above options and docker var TARGETARCH
+# We build for either x86_64 or ARM from above options using the docker $TARGETARCH
 FROM branch-version-${TARGETARCH} AS chosen_builder
 RUN echo "Called build!"
 
-# Run loin
+# Run Loin from a final debian container
 FROM debian:buster-slim
+# Copy just the binary from our build stage
 COPY --from=chosen_builder /usr/local/cargo/bin/loin /usr/local/bin/loin
+COPY run_loin /usr/local/bin/run_loin
+# Expose any necessary ports
 EXPOSE 4444
 # We should also use: $APP_HIDDEN_SERVICE
-CMD ["loin", "--bind_port", "4444", "--lnd_address=$LND_HOST:$LND_GRPC_PORT", "--lnd_cert_path=$TLS_FILE", "--lnd_macaroon_path=$MACAROON_FILE"]
+# Run
+CMD ["run_loin"]
+#CMD ["run_loin", "--bind-port", "4444", "--lnd-address=${LND_HOST}:${LND_GRPC_PORT}", "--lnd-cert-path=${TLS_FILE}", "--lnd-macaroon-path=${MACAROON_FILE}"]
