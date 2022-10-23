@@ -51,9 +51,13 @@ RUN echo "Called build!"
 
 # Run Loin from a final debian container
 FROM debian:buster-slim
+COPY --chown=1000:1000 . .
+USER 1000
 # Copy just the binary from our build stage
 COPY --from=chosen_builder /usr/local/cargo/bin/loin /usr/local/bin/loin
 COPY run_loin /usr/local/bin/run_loin
+COPY static/ ./static/
+
 # Expose any necessary ports
 EXPOSE 4444
 # We should also use: $APP_HIDDEN_SERVICE
