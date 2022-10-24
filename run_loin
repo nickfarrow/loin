@@ -12,12 +12,13 @@ then
     # echo "lnd_address=\"https://$DEVICE_DOMAIN_NAME:$LND_GRPC_PORT\"" >> $CONF
     echo "lnd_cert_path=\"$TLS_FILE\"" >> $CONF
     echo "lnd_macaroon_path=\"$MACAROON_FILE\"" >> $CONF
+    echo "endpoint=\"https://$APP_HIDDEN_SERVICE\"" >> $CONF
 fi
 
 cat loin.conf
-loin --conf loin.conf 1 038fe1bd966b5cb0545963490c631eaa1924e2c4c0ea4e7dcb5d4582a1e7f2f1a5@144.76.24.71:9735 1000000
-
-
+loin --conf loin.conf 
+# Old extra args and commands (may)
+# 1 028624b5cb872511d8b23a25ec351f6201af7e6b640edc0888fce05a8dede2bc8a@24nrvuglk652fenrjorggbi4d53rly56w7xhetux3fzf6wbbxdahi4yd.onion:8888 1000000
 # loin --bind-port=4444 --lnd-address=https://lightning_lnd_1:$LND_GRPC_PORT --lnd-cert-path=$TLS_FILE --lnd-macaroon-path=$MACAROON_FILE 1 038fe1bd966b5cb0545963490c631eaa1924e2c4c0ea4e7dcb5d4582a1e7f2f1a5@144.76.24.71:9735 1000000
 
 

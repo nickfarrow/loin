@@ -21,8 +21,6 @@ WORKDIR /usr/src/loin/
 COPY Cargo.toml Cargo.lock build.rs config_spec.toml ./
 COPY src/ ./src/
 COPY static/ ./static/
-COPY node_modules/ ./node_modules/
-# COPY run_loin ./run_loin
 
 ## x86_64
 FROM builder AS branch-version-amd64
@@ -52,7 +50,7 @@ RUN echo "Called build!"
 # Run Loin from a final debian container
 FROM debian:buster-slim
 COPY --chown=1000:1000 . .
-USER 1000
+# USER 1000
 # Copy just the binary from our build stage
 COPY --from=chosen_builder /usr/local/cargo/bin/loin /usr/local/bin/loin
 COPY run_loin /usr/local/bin/run_loin
@@ -60,7 +58,6 @@ COPY static/ ./static/
 
 # Expose any necessary ports
 EXPOSE 4444
-# We should also use: $APP_HIDDEN_SERVICE
 # Run
 CMD ["run_loin"]
 #CMD ["run_loin", "--bind-port", "4444", "--lnd-address=${LND_HOST}:${LND_GRPC_PORT}", "--lnd-cert-path=${TLS_FILE}", "--lnd-macaroon-path=${MACAROON_FILE}"]
