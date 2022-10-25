@@ -17,8 +17,8 @@
 		<br>
 		<br>
 		<header class="center">
-			<h1><u>L</u>ightning PayJ<u>oin</u></h1>
-			<p style="color: orange; text-align: center;">Halloween Alpha -- A lil Spooky!</p>
+			<h1>👻  <u>L</u>ightning PayJ<u>oin</u>  👻</h1>
+			<p style="color: orange; text-align: center;">🎃 Halloween Alpha-1 | Avoid sp👀ks</p>
 			<h2>Queue batches of lightning channels to open in a single transaction</h2>
 		</header>
 		<main lass="center-axyz">
@@ -35,7 +35,7 @@
 								New nodes need a reserve output of at least 10,000 sats. Set this to 10,000 fo a new node. 0 is fine thereafter.
 							</details>
 						</label>
-						<input type="number" name="wallet_amount" id="wallet" list="defaultReserveSats" min="0" step="1">
+						<input type="number" name="wallet_amount" id="wallet" list="defaultReserveSats" min="0" step="1" value="0">
 						<datalist id="defaultReserveSats">
 							<option value="10000"></option>
 						</datalist>
@@ -50,13 +50,13 @@
 					<!-- channels -->
 					<x-grid columns=2 id="channels">
 						<label id="destinationLabel" span=1>Destination Node</label><label id="capacityLabel" span=1>Channel Capacity (sats)</label>
-						<input type="text" name="channels[0][node]" aria-labelledby="destinationLabel" span=1><input type="number" name="channels[0][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span=1><!-- LND enforces minimum 20k sats channel -->
-						<button type="button" class="bigbutton" onclick="add_channel()" order=1>Queue Channel</button>
+						<input type="text" name="channels[0][node]" aria-labelledby="destinationLabel" placeholder="node@host:port" span=1><input type="number" name="channels[0][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span=1><!-- LND enforces minimum 20k sats channel -->
+						<button type="button" class="bigbutton" span="2" onclick="add_channel()" order=1>Queue Channel</button>
 					</x-grid>
 				</fieldset>
 				<br>
 				<div id="queue">
-					<button type="submit" class="bigbutton">Generate Funding Request QR</button>
+					<button type="submit" class="bigbutton" style="float: right">Generate Funding Request QR</button>
 				</div>
 				<output id="queued" class="invisible">
 					<h2>PayJoin here to open these channels</h2>

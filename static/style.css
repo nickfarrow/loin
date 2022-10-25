@@ -12,3 +12,6 @@ fieldset {
     background-color: black;
 }
 
+input {
+    text-align: right;
+}
