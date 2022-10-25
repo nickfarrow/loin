@@ -1,8 +1,14 @@
 html, body {
     color: rgb(179, 28, 28);
+    background-image: url("spookyloin2.png");
 }
 
 .bigbutton {
     background: #d38105; /* Green */
 
 }
+
+fieldset {
+    background-color: black;
+}
+

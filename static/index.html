@@ -18,31 +18,33 @@
 		<br>
 		<header class="center">
 			<h1><u>L</u>ightning PayJ<u>oin</u></h1>
+			<p style="color: orange; text-align: center;">Halloween Alpha -- A lil Spooky!</p>
 			<h2>Queue batches of lightning channels to open in a single transaction</h2>
 		</header>
 		<main lass="center-axyz">
 			<form action="/pj/schedule" method="post" enctype="application/x-www-form-urlencoded"
 				style="max-width: 750px; margin:0 auto; padding:2rem" x-flex direction="column">
-				<p style="color: orange">Halloween-quality pre-alpha software. A lil spooky!</p>
-				<div>
-					<label for="reserve">
-						<details>
-							<summary>
-								Anchor Reserve Deposit (sats)</label>
-							</summary>
-							New nodes need a reserve output of at least 10,000 sats. Set this to 10,000 fo a new node. 0 is fine thereafter.
-						</details>
-					</label>
-					<input type="number" name="wallet_amount" id="wallet" list="defaultReserveSats" min="0" step="1">
-					<datalist id="defaultReserveSats">
-						<option value="10000"></option>
-					</datalist>
-				</div>
-				<div>
-					<label for="fee_rate">Maximum fee rate (sats/vB)</label>
-					<input type="text" name="fee_rate" id="feerate" value="1">
-				</div>
-				<br>
+				<fieldset>
+					<legend>Config</legend>
+					<div>
+						<label for="reserve">
+							<details>
+								<summary>
+									Anchor Reserve Deposit (sats)</label>
+								</summary>
+								New nodes need a reserve output of at least 10,000 sats. Set this to 10,000 fo a new node. 0 is fine thereafter.
+							</details>
+						</label>
+						<input type="number" name="wallet_amount" id="wallet" list="defaultReserveSats" min="0" step="1">
+						<datalist id="defaultReserveSats">
+							<option value="10000"></option>
+						</datalist>
+					</div>
+					<div>
+						<label for="fee_rate">Maximum fee rate (sats/vB)</label>
+						<input type="text" name="fee_rate" id="feerate" value="1">
+					</div>
+				</fieldset>
 				<fieldset>
 					<legend>Queue Channels to Open</legend>
 					<!-- channels -->
