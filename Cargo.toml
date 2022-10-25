@@ -2,6 +2,7 @@
 name = "loin"
 version = "0.1.0"
 authors = ["Dan Gould <d@ngould.dev>", "Martin Habovstiak <martin.habovstiak@gmail.com>"]
+exclude = ["./tests/compose"]
 edition = "2018"
 
 [package.metadata.configure_me]
@@ -12,7 +13,7 @@ test_paths = []
 
 [dependencies]
 bitcoin = { version = "0.28.1", features = ["use-serde"] }
-bip78 = { git = "https://github.com/dangould/rust-payjoin", branch = "receive-logic-v3", features = ["sender", "receiver" ] }
+bip78 = { git = "https://github.com/dangould/rust-payjoin", rev = "8d9b7d6", features = ["sender", "receiver" ] }
 url = "2.2.2"
 hyper = "0.14.9"
 tonic_lnd = "0.4.0"
@@ -27,3 +28,12 @@ configure_me = "0.4.0"
 
 [build-dependencies]
 configure_me_codegen = "0.4.1"
+
+[dev-dependencies]
+bitcoincore-rpc = "0.15.0"
+rcgen =  "0.10.0"
+tempfile = "3"
+tonic = "0.6.2"
+hyper = { version = "0.14.9", features = ["full"] }
+hyper-tls = "0.5.0"
+tokio-native-tls = "0.3"
