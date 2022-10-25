@@ -100,8 +100,3 @@ pub(crate) struct Headers(hyper::HeaderMap);
 impl bip78::receiver::Headers for Headers {
     fn get_header(&self, key: &str) -> Option<&str> { self.0.get(key)?.to_str().ok() }
 }
-
-#[test]
-fn schedule_payjoin_form_submission() {
-
-}
