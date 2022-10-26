@@ -1,25 +1,19 @@
 #!/bin/sh
 
-# Create loin config (should pass as args later)
-
+# Old: create loin config (we may want some persistent & modifyable config in the future, will need a volume)
 # CONF=loin.conf
 # if [ ! -f $CONF ]
 # then
 #     touch $CONF
 #     echo "bind_port=4444" >> $CONF
 #     echo "lnd_address=\"https://lightning_lnd_1:$LND_GRPC_PORT\"" >> $CONF
-#     # echo "lnd_address=\"https://$DEVICE_DOMAIN_NAME:$LND_GRPC_PORT\"" >> $CONF
 #     echo "lnd_cert_path=\"$TLS_FILE\"" >> $CONF
 #     echo "lnd_macaroon_path=\"$MACAROON_FILE\"" >> $CONF
 #     echo "endpoint=\"https://$APP_HIDDEN_SERVICE\"" >> $CONF
 # fi
-
 # cat $CONF
 #loin --conf $CONF
-# Old extra args and commands (may)
-# 1 028624b5cb872511d8b23a25ec351f6201af7e6b640edc0888fce05a8dede2bc8a@24nrvuglk652fenrjorggbi4d53rly56w7xhetux3fzf6wbbxdahi4yd.onion:8888 1000000
+
 echo "Running loin"
 loin --bind-port=4444 --lnd-address=https://lightning_lnd_1:$LND_GRPC_PORT --lnd-cert-path=$TLS_FILE --lnd-macaroon-path=$MACAROON_FILE --endpoint=https://$APP_HIDDEN_SERVICE
-
-
 echo "STOPPED RUNNING LOIN"

@@ -20,7 +20,7 @@ ENV RUST_BACKTRACE=1
 WORKDIR /usr/src/loin/
 COPY Cargo.toml Cargo.lock build.rs config_spec.toml ./
 COPY src/ ./src/
-COPY static/ ./static/
+COPY static/ /usr/share/loin/static/
 
 ## x86_64
 FROM builder AS branch-version-amd64
@@ -29,7 +29,7 @@ RUN echo "Preparing to cargo build for x86_64 (${TARGETARCH})"
 RUN apt-get update && apt-get install -y musl-tools musl-dev
 # Add our x86 target to rust, then compile and install
 RUN rustup target add x86_64-unknown-linux-musl
-RUN cargo install --features=test_paths --target x86_64-unknown-linux-musl --path .
+RUN cargo install --target x86_64-unknown-linux-musl --path .
 
 # ARM
 FROM builder AS branch-version-arm64
@@ -41,7 +41,7 @@ RUN rustup target add aarch64-unknown-linux-musl
 ENV CC_aarch64_unknown_linux_musl=clang
 ENV AR_aarch64_unknown_linux_musl=llvm-ar
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"
-RUN cargo install --features=test_paths --target aarch64-unknown-linux-musl --path .
+RUN cargo install --target aarch64-unknown-linux-musl --path .
 
 # We build for either x86_64 or ARM from above options using the docker $TARGETARCH
 FROM branch-version-${TARGETARCH} AS chosen_builder
@@ -50,12 +50,12 @@ RUN echo "Called build!"
 # Run Loin from a final debian container
 FROM debian:buster-slim
 COPY --chown=1000:1000 . .
-#USER 1000
+USER 1000
 
 # Copy just the binary from our build stage
 COPY --from=chosen_builder /usr/local/cargo/bin/loin /usr/local/bin/loin
 COPY run_loin /usr/local/bin/run_loin
-COPY static/ ./static/
+COPY static/ /usr/share/loin/static/
 
 # Expose any necessary ports
 EXPOSE 4444
