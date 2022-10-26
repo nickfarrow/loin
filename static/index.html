@@ -4,7 +4,6 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/selekkt-skelet@latest/css/skelet.min.css">
-		<link rel="stylesheet" href="https://nolooking.chaincase.app/style.css">
 		<link rel="stylesheet" href="style.css">
 		<title>nolooking // Lightning PayJoin</title>
 		<style>
@@ -51,12 +50,12 @@
 					<x-grid columns=2 id="channels">
 						<label id="destinationLabel" span=1>Destination Node</label><label id="capacityLabel" span=1>Channel Capacity (sats)</label>
 						<input type="text" name="channels[0][node]" aria-labelledby="destinationLabel" placeholder="node@host:port" span=1><input type="number" name="channels[0][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span=1><!-- LND enforces minimum 20k sats channel -->
-						<button type="button" class="bigbutton" span="2" onclick="add_channel()" order=1>Queue Channel</button>
+						<button type="button" style="background: #d38105;" span="2" onclick="add_channel()" order=1>Queue Channel</button>
 					</x-grid>
 				</fieldset>
 				<br>
 				<div id="queue">
-					<button type="submit" class="bigbutton" style="float: right">Generate Funding Request QR</button>
+					<button type="submit" class="float-right" style="background: #d38105;">Generate Funding Request QR</button>
 				</div>
 				<output id="queued" class="invisible">
 					<h2>PayJoin here to open these channels</h2>
