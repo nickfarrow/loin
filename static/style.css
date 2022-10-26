@@ -58,17 +58,6 @@ p {
     -webkit-background-clip: text;
 }
 
-a {
-    color: #0098ac;
-    font-weight: 600;
-    font-family: Lucida Console, Liberation Mono,
-        DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New;
-    /* text-decoration:underline; */
-    text-decoration-thickness: 1px;
-    /* text-decoration-line: underline; */
-    text-decoration-style: double;
-}
-
 fieldset {
     background-color: black;
 }
