@@ -25,14 +25,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(payjoin) = scheduled_pj {
         let address = scheduler.schedule_payjoin(&payjoin).await?;
-        println!("{}", scheduler::format_bip21(
-            address,
-            payjoin.total_amount(),
-            secure_endpoint.clone()
-        ));
+        println!(
+            "{}",
+            scheduler::format_bip21(address, payjoin.total_amount(), secure_endpoint.clone())
+        );
     }
 
-    let bind_addr = ([127, 0, 0, 1], config.bind_port).into();
+    let bind_addr = ([0, 0, 0, 0], config.bind_port).into();
     http::serve(scheduler, bind_addr, secure_endpoint).await?;
 
     Ok(())
