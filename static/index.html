@@ -92,7 +92,6 @@
 					.then(async (r) => {
 						console.log(r);
 						if (!r.ok)
-							console.log(r);
 							throw new Error('Something went wrong.');
 
 						let link = document.getElementById("bip21");
