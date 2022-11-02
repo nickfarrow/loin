@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Add host-gateway to /etc/hosts
+      run: |
+        sudo echo "$(ip addr show | grep "\binet\b.*\bdocker0\b" | awk '{print $2}' | cut -d '/' -f 1) host-gateway" | sudo tee -a /etc/hosts
     - uses: KengoTODA/actions-setup-docker-compose@main
       with:
         version: '2.10.2'
