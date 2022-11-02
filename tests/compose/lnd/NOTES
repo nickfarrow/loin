@@ -1,0 +1,55 @@
+NOTES
+// peer lncli config 11:34am
+lncli -n regtest --macaroonpath=/data/chain/bitcoin/regtest/admin.macaroon getinfo
+// merchant lncli config 11:34
+lncli -n regtest --macaroonpath=/data/chain/bitcoin/regtest/admin.macaroon --rpcserver=127.0.0.1:10008 getinfo
+// bitcoind mine init 
+bitcoin-cli -chain=regtest -rpcport=43782 -rpcpassword=DwubwWsoo3 -rpcuser=ceiwHEbqWI83 -generate 100
+
+NEED: cleanup method to docker-compose down -v no matter what
+
+12-oct - 7-dec 6 week
+
+Dev env
+
+Week 1 (short) 12-19 oct:
+Nginx
+Code finished.
+- Front-end web app PayJoin Sender = paste a valid, https bip21 pj and it will sendd from bitcoin core / umbrels wallet
+- HTTPS reverse proxy to our PayJoin receiving server
+- Lightning channel opening receiver
+
+Dev env, ideally on replit. Nix? 
+
+BRING TO UMBREL
+
+Week 2 20-26 oct:
+Video demo + article on HOW TO in the umbrel app store
+
+Default batch txs to Bolt.fun, Fulgur Ventures, Breez (get them payjoin), sponsors etc, Ably Geyser, adopting bitcoin, tab conf, opensats
+
+Week 3 27- nov 2:
+Coin Selection to avoid UIH for receiver + Talk to Users
+pull Loin into lib
+Voltage node
+
+week 4 3- nov 9:
+Merge 2 Payjoins at a coordinator server
+
+week 5 nov 10 - 16
+
+Week 6 nov 17 - 24
+
+<JUDGEMENT>
+
+Week 5 De:
+
+
+- Transanction merging coordinating server
+- 
+-
+
+Week 6:
+Video Demo, How-to Article, News Article
+
+get payjoin implementation
