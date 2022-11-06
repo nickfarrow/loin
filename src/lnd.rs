@@ -4,9 +4,9 @@ use std::num::TryFromIntError;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use bitcoin::consensus::Decodable;
+use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin::psbt::PartiallySignedTransaction;
-use bitcoin::{Address, Amount};
+use bitcoin::{Address, Amount, Transaction};
 use ln_types::P2PAddress;
 use log::info;
 use tokio::sync::Mutex as AsyncMutex;
@@ -18,6 +18,62 @@ use tonic_lnd::lnrpc::{
 use tonic_lnd::walletrpc::RequiredReserveRequest;
 
 use crate::scheduler::ChannelId;
+
+// #[derive(Debug)]
+// pub enum LndError {
+//     Generic(tonic_lnd::Error),
+//     ConnectError(tonic_lnd::ConnectError),
+//     ParseBitcoinAddressFailed(bitcoin::util::address::Error),
+//     VersionRequestFailed(tonic_lnd::Error),
+//     ParseVersionFailed { version: String, error: std::num::ParseIntError },
+//     LNDTooOld(String),
+//     BadPsbt(bitcoin::consensus::encode::Error),
+//     Publish(String),
+// }
+
+// impl fmt::Display for LndError {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match self {
+//             LndError::Generic(error) => error.fmt(f),
+//             LndError::ConnectError(error) => error.fmt(f),
+//             LndError::ParseBitcoinAddressFailed(err) => err.fmt(f),
+//             LndError::VersionRequestFailed(_) => write!(f, "failed to get LND version"),
+//             LndError::ParseVersionFailed { version, error: _ } => {
+//                 write!(f, "Unparsable LND version '{}'", version)
+//             }
+//             LndError::BadPsbt(error) => error.fmt(f),
+//             LndError::LNDTooOld(version) => write!(
+//                 f,
+//                 "LND version {} is too old - it would cause GUARANTEED LOSS of sats!",
+//                 version
+//             ),
+//             LndError::Publish(error) => error.fmt(f),
+//         }
+//     }
+// }
+
+// impl std::error::Error for LndError {
+//     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+//         match self {
+//             LndError::Generic(error) => Some(error),
+//             LndError::ConnectError(error) => Some(error),
+//             LndError::ParseBitcoinAddressFailed(error) => Some(error),
+//             LndError::VersionRequestFailed(error) => Some(error),
+//             LndError::ParseVersionFailed { version: _, error } => Some(error),
+//             LndError::BadPsbt(error) => Some(error),
+//             LndError::LNDTooOld(_) => None,
+//             LndError::Publish(_) => None,
+//         }
+//     }
+// }
+
+// impl From<tonic_lnd::Error> for LndError {
+//     fn from(value: tonic_lnd::Error) -> Self { LndError::Generic(value) }
+// }
+
+// impl From<tonic_lnd::ConnectError> for LndError {
+//     fn from(value: tonic_lnd::ConnectError) -> Self { LndError::ConnectError(value) }
+// }
 
 #[derive(Clone)]
 pub struct LndClient(Arc<AsyncMutex<tonic_lnd::Client>>);
@@ -173,6 +229,92 @@ impl LndClient {
         Ok(())
     }
 
+    pub async fn fund_original_psbt(
+        &self,
+        address: &bitcoin::Address,
+        amount: bitcoin::Amount,
+    ) -> Result<PartiallySignedTransaction, LndError> {
+        let client = &mut *self.0.lock().await;
+        let client = client.wallet();
+
+        let mut outputs = std::collections::HashMap::with_capacity(1);
+        outputs.insert(address.to_string(), amount.as_sat()); // todo double check u64 as_sat?
+        let tx_template = tonic_lnd::walletrpc::TxTemplate { outputs, ..Default::default() };
+        let template = Some(tonic_lnd::walletrpc::fund_psbt_request::Template::Raw(tx_template));
+        let fund_psbt = tonic_lnd::walletrpc::FundPsbtRequest { template, ..Default::default() };
+
+        let response = client.fund_psbt(fund_psbt).await?;
+        // it is the caller's responsibility to either spend the locked UTXOs (by finalizing and then publishing the transaction)
+        //or to unlock/release the locked UTXOs in case of an error on the caller's side.
+        let stream = response.get_ref();
+        let raw_psbt = stream.funded_psbt.as_slice();
+        let funded_psbt =
+            PartiallySignedTransaction::consensus_decode(raw_psbt).map_err(LndError::BadPsbt)?;
+
+        Ok(funded_psbt)
+    }
+
+    pub async fn sign_psbt(
+        &self,
+        funded_psbt: PartiallySignedTransaction,
+    ) -> Result<PartiallySignedTransaction, LndError> {
+        let client = &mut *self.0.lock().await;
+        let client = client.wallet();
+
+        let mut encoder = base64::write::EncoderWriter::new(Vec::new(), base64::STANDARD);
+        funded_psbt.consensus_encode(&mut encoder).unwrap();
+        let funded_psbt = encoder.finish().unwrap();
+        // it is the caller's responsibility to either spend the locked UTXOs (by finalizing and then publishing the transaction)
+        //or to unlock/release the locked UTXOs in case of an error on the caller's side.
+        let req = tonic_lnd::walletrpc::SignPsbtRequest { funded_psbt, ..Default::default() };
+        let res = client.sign_psbt(req).await?;
+        // TODO !IMPORTANT! else if error
+        // unlock / release locked utxos
+        let stream = res.get_ref();
+        let signed_psbt = stream.signed_psbt.as_slice();
+
+        let tx =
+            PartiallySignedTransaction::consensus_decode(signed_psbt).map_err(LndError::BadPsbt)?;
+        Ok(tx)
+    }
+
+    pub async fn finalize_psbt(
+        &self,
+        funded_psbt: PartiallySignedTransaction,
+    ) -> Result<Transaction, LndError> {
+        let client = &mut *self.0.lock().await;
+        let client = client.wallet();
+
+        let mut encoder = base64::write::EncoderWriter::new(Vec::new(), base64::STANDARD);
+        funded_psbt.consensus_encode(&mut encoder).unwrap();
+        let funded_psbt = encoder.finish().unwrap();
+        let req = tonic_lnd::walletrpc::FinalizePsbtRequest { funded_psbt, ..Default::default() };
+        let res = client.finalize_psbt(req).await?;
+        // TODO !IMPORTANT! else if error
+        // unlock / release locked utxos
+        let stream = res.get_ref();
+        let raw_final_tx = stream.raw_final_tx.as_slice();
+
+        let tx = Transaction::consensus_decode(raw_final_tx).map_err(LndError::BadPsbt)?;
+        Ok(tx)
+    }
+
+    pub async fn broadcast(&self, tx: Transaction) -> Result<bitcoin::Txid, LndError> {
+        let client = &mut *self.0.lock().await;
+        let client = client.wallet();
+
+        let mut encoder = base64::write::EncoderWriter::new(Vec::new(), base64::STANDARD);
+        tx.consensus_encode(&mut encoder).unwrap();
+        let tx_hex = encoder.finish().unwrap();
+        let req = tonic_lnd::walletrpc::Transaction { tx_hex, ..Default::default() };
+        let res = client.publish_transaction(req).await?;
+        let stream = res.get_ref();
+        if &stream.publish_error != "" {
+            return Err(LndError::Publish(stream.publish_error.to_owned()));
+        }
+        Ok(tx.txid())
+    }
+
     pub async fn required_reserve(
         &self,
         additional_public_channels: u32,
@@ -208,6 +350,8 @@ pub enum LndError {
     UnexpectedUpdate(tonic_lnd::lnrpc::open_status_update::Update),
     ParseVersionFailed { version: String, error: std::num::ParseIntError },
     LNDTooOld(String),
+    BadPsbt(bitcoin::consensus::encode::Error),
+    Publish(String),
 }
 
 impl fmt::Display for LndError {
@@ -229,6 +373,8 @@ impl fmt::Display for LndError {
                 "LND version {} is too old - it would cause GUARANTEED LOSS of sats!",
                 version
             ),
+            LndError::BadPsbt(error) => error.fmt(f),
+            LndError::Publish(error) => error.fmt(f),
         }
     }
 }
@@ -246,6 +392,8 @@ impl std::error::Error for LndError {
             Self::UnexpectedUpdate(_) => None,
             LndError::ParseVersionFailed { version: _, error } => Some(error),
             LndError::LNDTooOld(_) => None,
+            LndError::BadPsbt(error) => Some(error),
+            LndError::Publish(_) => None,
         }
     }
 }

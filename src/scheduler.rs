@@ -6,7 +6,8 @@ use std::{fmt, io};
 use bip78::receiver::{Proposal, UncheckedProposal};
 use bitcoin::consensus::Encodable;
 use bitcoin::psbt::PartiallySignedTransaction;
-use bitcoin::{Address, Amount, Script, TxOut};
+use bitcoin::{Address, Amount, Script, TxOut, Txid};
+use hyper_tls::HttpsConnector;
 use ln_types::P2PAddress;
 use log::{error, info};
 use tonic_lnd::lnrpc::OpenChannelRequest;
@@ -434,6 +435,52 @@ impl Scheduler {
         }
         Ok(())
     }
+
+    // do I want to split this into get_pj_request
+    // http.process_pj_request
+    // scheduler.process_pj_response?
+    pub async fn send_payjoin<'a>(&self, uri: bip78::Uri<'_>) -> Result<Txid, SchedulerError> {
+        use bip78::PjUriExt;
+        // get original PSBT
+        let pj_uri = bip78::UriExt::check_pj_supported(uri)
+            .map_err(|e| SchedulerError::UriDoesNotSupportPayJoin(e.to_string()))?;
+        let original_psbt = if let Some(amount) = pj_uri.amount {
+            self.lnd.fund_original_psbt(&pj_uri.address, amount).await?
+        } else {
+            return Err(SchedulerError::UriDoesNotSupportPayJoin(
+                "Missing amount. Make sure the bip21 uri specifies an amount".to_string(),
+            ));
+        };
+        let original_psbt = self.lnd.sign_psbt(original_psbt).await?;
+        let pj_params = bip78::sender::Configuration::with_fee_contribution(
+            bip78::bitcoin::Amount::from_sat(10000),
+            None,
+        );
+        let (req, ctx) = pj_uri
+            .create_pj_request(original_psbt, pj_params)
+            .expect("failed to make http pj request");
+
+        let pj_endpoint = req.url.to_string().parse::<hyper::Uri>().unwrap();
+        let request = hyper::Request::builder()
+            .method(hyper::Method::POST)
+            .uri(pj_endpoint)
+            .header("Content-Type", "text/plain")
+            .body(hyper::Body::from(req.body))
+            .expect("request builder");
+
+        let https = HttpsConnector::new();
+        let client = hyper::Client::builder().build(https);
+        let response = client.request(request).await.expect("failed to get http pj response");
+        dbg!("res: {:#?}", &response);
+        // TODO Handle error. Does hyper even belong in scheduler? perhaps.
+        let response = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let payjoin_psbt =
+            ctx.process_response(response.to_vec().as_slice()).expect("failed to process response"); // bip78::sender::ValidationError
+        dbg!("Proposed psbt: {:#?}", &payjoin_psbt);
+        let tx = self.lnd.finalize_psbt(payjoin_psbt).await?;
+        let txid = self.lnd.broadcast(tx).await?;
+        Ok(txid)
+    }
 }
 
 pub fn format_bip21(address: Address, amount: Amount, endpoint: url::Url) -> String {
@@ -464,6 +511,8 @@ pub enum SchedulerError {
     PayJoinCannotOpenAnyChannel,
     /// Original Psbt does not respect requested amount
     OriginalPsbtInvalidAmount,
+    /// Bip21 has no valid `pj=` parameter
+    UriDoesNotSupportPayJoin(String),
 }
 
 impl fmt::Display for SchedulerError {
@@ -481,4 +530,9 @@ impl From<LndError> for SchedulerError {
 
 impl From<io::Error> for SchedulerError {
     fn from(v: io::Error) -> Self { Self::Io(v) }
+}
+
+#[test]
+fn can_send_payjoin() {
+    assert!(false);
 }
