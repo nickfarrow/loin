@@ -32,8 +32,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("{}", bip21);
     }
 
+    let (tx, _) = tokio::sync::broadcast::channel(16);
     let bind_addr = (config.bind_ip, config.bind_port).into();
-    http::serve(scheduler, bind_addr).await?;
+    http::serve(scheduler, tx, bind_addr).await?;
 
     Ok(())
 }

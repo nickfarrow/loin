@@ -183,6 +183,7 @@ mod integration {
             }
         });
 
+        let (tx, _) = tokio::sync::broadcast::channel(16);
         let bind_addr =
             (if env::consts::OS == "macos" { [127, 0, 0, 1] } else { [172, 17, 0, 1] }, 3000)
                 .into();

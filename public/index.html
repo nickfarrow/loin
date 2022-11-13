@@ -95,6 +95,14 @@
 				document.querySelector(':root').style.setProperty('--secondary', "rgb(" + color_triplet + ")");
 			}
 
+			(function() {
+				webSocket = new WebSocket(`ws://${window.location.hostname}:3000`);
+				webSocket.onmessage = (event) => {
+					console.log('onmessage');
+					alert(event.data);
+				}
+			})();
+
 			function add_channel() {
 				let channels = document.getElementById("channels");
 				let indexToAdd = Math.floor(channels.children.length/2)
