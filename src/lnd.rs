@@ -8,7 +8,7 @@ use bitcoin::consensus::Decodable;
 use bitcoin::psbt::PartiallySignedTransaction;
 use bitcoin::{Address, Amount};
 use ln_types::P2PAddress;
-use log::{info, warn};
+use log::info;
 use tokio::sync::Mutex as AsyncMutex;
 use tonic_lnd::lnrpc::funding_transition_msg::Trigger;
 use tonic_lnd::lnrpc::{
@@ -45,7 +45,7 @@ impl LndClient {
         let version = Self::parse_lnd_version(version_str)?;
 
         if version < (0, 15, 1) {
-            return Err(LndError::LNDTooOld(version_str.clone()));
+            return Err(LndError::LNDTooOld(version_str.clone().to_owned()));
         }
 
         Ok(Self(Arc::new(AsyncMutex::new(client))))

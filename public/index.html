@@ -40,7 +40,7 @@
 						</div>
 					</x-grid>
 				</fieldset>
-				<fieldset>
+				<fieldset style="min-width: 706px; width: 100%;">
 					<legend>Queue Channels to Open</legend>
 					<x-grid columns=2>
 						<label id="destinationLabel" span=1>Destination Node</label><label id="capacityLabel" span=1>Channel Capacity (sats)</label>
@@ -56,6 +56,35 @@
 							<button type="button" class="is-circle colored-button" onclick="remove_channel()">-</button>
 						</x-flex>
 					</p>
+					<div>
+				</fieldset>
+				<fieldset class="recommendation-wrapper">
+					<legend>Get Recommended Outbound Channels</legend>
+					<div class="recommendation-button-wrapper">
+						<button type="button" onclick="get_recommended_channels()">Get Recommended Channels</button>
+					</div>
+					<div class="recommendation-node-wrapper invisible">
+						<h2 class="routing-node-title">Routing Node</h2>
+						<ul class="recommendation-node-list">
+							<li class="recommendation-node-property"><span class="routing-node-alias"></span></li>
+							<li class="recommendation-node-property">&nbsp;Active Capacity:&nbsp;<span class="routing-node-capacity"></span> | &nbsp;Channel Count:&nbsp;<span class="routing-node-count"></span></li> 
+							<li class="recommendation-node-property"><span class="routing-node-address"></span></li>
+						</ul>
+						<div class="recommendation-node-button-wrapper">
+							<button type="button" onclick="add_recommended_node('routing_node')">Use</button>	
+						</div>
+					</div>
+					<div class="recommendation-node-wrapper invisible">
+						<h2 class="routing-node-title">Edge Node</h2>
+						<ul class="recommendation-node-list">
+							<li class="recommendation-node-property"><span class="edge-node-alias"></span></li>
+							<li class="recommendation-node-property">&nbsp;Active Capacity:&nbsp;<span class="edge-node-capacity"></span> | &nbsp;Channel Count:&nbsp;<span class="edge-node-count"></span></li> 
+							<li class="recommendation-node-property"><span class="edge-node-address"></span></li>
+						</ul>
+						<div class="recommendation-node-button-wrapper">
+							<button type="button" onclick="add_recommended_node('edge_node')">Use</button>	
+						</div>
+					</div>
 				</fieldset>
 				<div>
 					<label for="fee_rate">Maximum fee rate (sats/vB)</label>
@@ -95,11 +124,11 @@
 				document.querySelector(':root').style.setProperty('--secondary', "rgb(" + color_triplet + ")");
 			}
 
-			function add_channel() {
+			function add_channel(address="") {
 				let channels = document.getElementById("channels");
 				let indexToAdd = Math.floor(channels.children.length/2)
 				let div = document.createElement('div');
-				div.innerHTML = `<input type="text" name="channels[${indexToAdd}][node]" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${indexToAdd}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
+				div.innerHTML = `<input type="text" name="channels[${indexToAdd}][node]" value="${address}" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${indexToAdd}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
 				channels.appendChild(div.firstChild);
 				channels.appendChild(div.lastChild);
 			}
@@ -120,6 +149,36 @@
 			document.querySelector("#wantsInbound").addEventListener("input", async (event) => {
 				document.querySelector("#inboundCapacity").value = event.target.checked ? 1000000 : 0;
 			});
+			async function get_recommended_channels(){
+				document.getElementsByClassName('recommendation-button-wrapper')[0].classList.add('invisible')
+				try {
+					recommendations = await (await fetch('/recommended', {
+						method: 'GET',
+					})).json()
+					document.getElementsByClassName('routing-node-alias')[0].innerHTML = recommendations.routing_node.alias
+					document.getElementsByClassName('routing-node-capacity')[0].innerHTML = recommendations.routing_node.capacity
+					document.getElementsByClassName('routing-node-count')[0].innerHTML = recommendations.routing_node.active_channel_count
+					document.getElementsByClassName('edge-node-alias')[0].innerHTML = recommendations.edge_node.alias
+					document.getElementsByClassName('edge-node-capacity')[0].innerHTML = recommendations.edge_node.capacity
+					document.getElementsByClassName('edge-node-count')[0].innerHTML = recommendations.edge_node.active_channel_count
+					Array.from(document.getElementsByClassName('recommendation-node-wrapper')).forEach(el => el.classList.remove('invisible'));
+				} catch (error) {
+					console.error(error)
+					alert("Something went wrong. Please try again.")
+				}
+			}
+
+			function add_recommended_node(type = 'routing_node') {
+				const node = recommendations[type];
+				if (!node) {
+					alert("Something went wrong. Please try again.");
+					return;
+				}
+				const pubkey = node.public_key;
+				const socket = node.sockets.includes(',') ? node.sockets.split(',')[0] : node.sockets;
+				add_channel(`${pubkey}@${socket}`);
+
+			}
 
 			document.querySelector("form").addEventListener("submit", async (event) => {
 				event.preventDefault();
