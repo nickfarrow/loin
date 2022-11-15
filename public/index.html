@@ -63,8 +63,37 @@
 					<a href="" id="bip21"></a>
 					<p>Please use <a href="https://en.bitcoin.it/wiki/PayJoin_adoption" target="_blank">a wallet that supports</a> BIP 78 <a href="https://bitcoinmagazine.com/culture/blockchain-analysis-about-get-harder-p2ep-enters-testing-phase" target="blank">P2EP</a> PayJoins!</p>
 				</output>
+				<br>
+				<br>
 			</form>
-
+			<form x-flex direction="column">
+				<fieldset>
+					<div id="getinbound-wrapper">
+						<legend>Buy Inbound Lighning Channel</legend>
+						<div id="getinbound-button-wrapper">
+							<x-grid columns=2>
+								<button type="button" onclick="get_inbound_quote()" span="2">Get Quote</button>
+							</x-grid>
+						</div>
+						<div id="getinbound-response" class="invisible">
+							<small>
+								A <span id="getinbound-capacity"></span> satoshi inbound lightning channel currently costs <span id="getinbound-price"></span> sats. (<span id="getinbound-duration"></span> month).
+								<br>
+								To open, send <span id="getinbound-price-2"></span> sats to:
+							</small>
+							<br>
+							<br>
+							<code><span id="getinbound-address"></span></code>
+							<br>
+							<br>
+							<small>⚡️👀 Your lightning channel should open within a few hours. 👀⚡️</small>
+							<br>
+							<br>
+							<small>If the channel fails to open, you will be refunded to an address from your LND onchain wallet (sent when you hit "Get Quote").</small>
+						</div>
+					</div>
+				</fieldset>
+			</form>
 		</main>
 		<script type="text/javascript">
 			function add_channel() {
@@ -73,6 +102,24 @@
 				div.innerHTML = `<input type="text" name="channels[${channels.children.length/2}][node]" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${channels.children.length/2}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
 				channels.appendChild(div.firstChild);
 				channels.appendChild(div.lastChild);
+			}
+
+			async function get_inbound_quote(){
+				try {
+					quote = await (await fetch('/getinbound', {
+						method: 'GET',
+					})).json()
+					document.getElementById("getinbound-button-wrapper").classList.add("invisible");
+					document.getElementById("getinbound-response").classList.remove("invisible");
+					document.getElementById("getinbound-price").innerHTML = quote.price;
+					document.getElementById("getinbound-price-2").innerHTML = quote.price;
+					document.getElementById("getinbound-capacity").innerHTML = quote.size;
+					document.getElementById("getinbound-duration").innerHTML = quote.duration;
+					document.getElementById("getinbound-address").innerHTML = quote.address;
+			} catch (error) {
+					console.error(error)
+					alert("Failed to get quote from provider. Please try again later.")
+				}
 			}
 
 			function remove_channel() {
