@@ -10,7 +10,7 @@ use ln_types::P2PAddress;
 use tokio::sync::Mutex as AsyncMutex;
 use tonic_lnd::lnrpc::funding_transition_msg::Trigger;
 use tonic_lnd::lnrpc::{
-    FundingPsbtVerify, FundingTransitionMsg, OpenChannelRequest, OpenStatusUpdate,
+    FundingPsbtVerify, FundingTransitionMsg, GetInfoResponse, OpenChannelRequest, OpenStatusUpdate,
 };
 use tonic_lnd::walletrpc::RequiredReserveRequest;
 
@@ -96,6 +96,13 @@ impl LndClient {
             .new_address(tonic_lnd::lnrpc::NewAddressRequest { r#type: 0, account: String::new() })
             .await?;
         response.get_ref().address.parse::<Address>().map_err(LndError::ParseBitcoinAddressFailed)
+    }
+
+    pub async fn get_info(&self) -> Result<GetInfoResponse, LndError> {
+        let mut client = self.0.lock().await;
+        let response =
+            client.lightning().get_info(tonic_lnd::lnrpc::GetInfoRequest { ..Default::default() }).await?;
+        Ok(response.into_inner())
     }
 
     /// Requests to open a channel with remote node, returning the psbt of the funding transaction.

@@ -1,5 +1,6 @@
 pub mod args;
 mod http;
+pub mod inbound;
 mod lnd;
 pub mod scheduler;
 

@@ -240,6 +240,8 @@ impl Scheduler {
         Self { lnd, endpoint, pjs: Default::default() }
     }
 
+    pub fn lnd(&self) -> &LndClient { &self.lnd }
+
     pub async fn from_config(config: &crate::config::Config) -> Result<Self, SchedulerError> {
         Ok(Scheduler::new(LndClient::from_config(&config).await?, config.endpoint.parse().expect("Malformed secure endpoint from config file. Expecting a https or .onion URI to proxy payjoin requests")))
     }
