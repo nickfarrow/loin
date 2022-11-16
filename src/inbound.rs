@@ -9,10 +9,10 @@ async fn body_to_string(body: Body) -> String {
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Quote {
-    price: u32,
+    pub price: u32,
     size: u32,
     duration: u32,
-    address: String,
+    pub address: String,
 }
 
 pub async fn get_quote(pubkey: &str, refund_address: &str) -> Result<Quote, hyper::http::Error> {

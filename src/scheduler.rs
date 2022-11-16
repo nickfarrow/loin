@@ -64,8 +64,17 @@ pub struct ScheduledPayJoin {
 }
 
 impl ScheduledPayJoin {
-    pub fn new(reserve_deposit: bitcoin::Amount, batch: ChannelBatch, quote: Option<crate::inbound::Quote>) -> Self {
-        Self { reserve_deposit, channels: batch.channels().clone(), fee_rate: batch.fee_rate(), quote }
+    pub fn new(
+        reserve_deposit: bitcoin::Amount,
+        batch: ChannelBatch,
+        quote: Option<crate::inbound::Quote>,
+    ) -> Self {
+        Self {
+            reserve_deposit,
+            channels: batch.channels().clone(),
+            fee_rate: batch.fee_rate(),
+            quote,
+        }
     }
 
     fn total_amount(&self) -> bitcoin::Amount {
@@ -74,6 +83,11 @@ impl ScheduledPayJoin {
             .map(|channel| channel.amount)
             .fold(bitcoin::Amount::ZERO, std::ops::Add::add)
             + self.reserve_deposit
+            + (if let Some(quote) = &self.quote {
+                Amount::from_sat(quote.price.into())
+            } else {
+                Amount::ZERO
+            })
             + self.fees()
     }
 
@@ -202,11 +216,11 @@ impl ScheduledPayJoin {
     }
 
     // gen_funding_created AKA
-    fn add_channels_to_psbt<I>(
+    fn substitue_psbt_outputs<I>(
         &self,
         original_psbt: PartiallySignedTransaction,
-        owned_vout: usize,
-        funding_txos: I, // 
+        owned_vout: usize, // the original vout paying us. This is the one we can substitute
+        funding_txos: I,
     ) -> PartiallySignedTransaction
     where
         I: IntoIterator<Item = TxOut>,
@@ -215,12 +229,13 @@ impl ScheduledPayJoin {
         let funding_txout = iter.next().unwrap(); // we assume there is at least 1.
 
         let mut proposal_psbt = original_psbt.clone();
-        // determine whether we replace original psbt's owned output
-        // or whether we change the value to be wallet amount
+
+        // determine whether we substitute channel opens for the original psbt's ownedoutput to us
         if self.reserve_deposit() == bitcoin::Amount::ZERO {
             assert_eq!(funding_txout.value, self.channels[0].amount.as_sat());
             proposal_psbt.unsigned_tx.output[owned_vout] = funding_txout;
         } else {
+            // or keep it and adjust the amount for the on-chain reserve deposit
             proposal_psbt.unsigned_tx.output[owned_vout].value = self.reserve_deposit().as_sat();
             proposal_psbt.unsigned_tx.output.push(funding_txout)
         }
@@ -271,8 +286,7 @@ impl Scheduler {
         let bitcoin_addr = self.lnd.get_new_bech32_address().await?;
 
         let required_reserve = self.lnd.required_reserve(batch.channels().len() as u32).await?;
-        let inbound_quote =
-            if batch.wants_inbound_quote() { self.get_quote().await } else { None };
+        let inbound_quote = if batch.wants_inbound_quote() { self.get_quote().await } else { None };
         let pj = &ScheduledPayJoin::new(required_reserve, batch, inbound_quote);
 
         if self.insert_payjoin(&bitcoin_addr, pj) {
@@ -302,6 +316,8 @@ impl Scheduler {
         &self,
         original_req: UncheckedProposal,
     ) -> Result<String, SchedulerError> {
+        use std::str::FromStr;
+
         if original_req.is_output_substitution_disabled() {
             return Err(SchedulerError::OutputSubstitutionDisabled);
         }
@@ -336,12 +352,24 @@ impl Scheduler {
         // initiate multiple `open_channel` requests and return the vector:
         // Vec<(temporary_channel_id:, funding_txout:)>
         let open_chan_results = pj.multi_open_channel(&self.lnd).await?;
-        let funding_txouts = open_chan_results.iter().map(|(_, txo)| txo.clone());
+        let mut txouts_to_substitute: Vec<TxOut> =
+            open_chan_results.iter().map(|(_, txo)| txo.clone()).collect();
         let temporary_chan_ids = open_chan_results.iter().map(|(id, _)| *id);
 
+        // add the output paying for inbound
+        if let Some(quote) = &pj.quote {
+            let inbound_txo = bitcoin::blockdata::transaction::TxOut {
+                value: quote.price.into(),
+                script_pubkey: bitcoin::Address::from_str(&quote.address).unwrap().script_pubkey(),
+            };
+            txouts_to_substitute.push(inbound_txo);
+        };
+
+        // TODO ensure privacy preserving txo ordering. should be responsibility of payjoin lib
+
         // create and send `funding_created` to all responding lightning nodes
-        let proposal_psbt = pj.add_channels_to_psbt(original_psbt, owned_vout, funding_txouts);
-//        let proposal_psbt = pj.add_inbound_payment_to_psbt(proposal_psbt, owned_vout, funding_txouts);
+        let proposal_psbt =
+            pj.substitue_psbt_outputs(original_psbt, owned_vout, txouts_to_substitute);
 
         let mut raw_psbt = Vec::new();
         proposal_psbt.consensus_encode(&mut raw_psbt)?;
