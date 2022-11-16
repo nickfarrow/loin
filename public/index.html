@@ -130,7 +130,11 @@
 				let channels = document.getElementById("channels");
 				let indexToAdd = Math.floor(channels.children.length/2)
 				let div = document.createElement('div');
-				div.innerHTML = `<input type="text" name="channels[${indexToAdd}][node]" value="${address}" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${indexToAdd}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
+				if (address == "") {
+					div.innerHTML = `<input type="text" name="channels[${indexToAdd}][node]" value="${address}" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${indexToAdd}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
+				} else {
+					div.innerHTML = `<input type="text" value="${address}" name="channels[${indexToAdd}][node]" value="${address}" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${indexToAdd}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
+				}
 				channels.appendChild(div.firstChild);
 				channels.appendChild(div.lastChild);
 			}
