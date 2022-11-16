@@ -7,7 +7,6 @@ use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use qrcode_generator::QrCodeEcc;
 
 use crate::scheduler::{ChannelBatch, Scheduler, SchedulerError};
-use crate::inbound::get_quote;
 
 #[cfg(not(feature = "test_paths"))]
 const PUBLIC_DIR: &str = "/usr/share/nolooking/public";
@@ -45,7 +44,6 @@ async fn handle_web_req(
         (&Method::GET, "/") => handle_index().await,
         (&Method::POST, "/pj") => handle_pj(scheduler, req).await,
         (&Method::POST, "/schedule") => handle_schedule(scheduler, req).await,
-        (&Method::GET, "/getinbound") => handle_getinbound(scheduler).await,
         (&Method::GET, path) => serve_public_file(path).await,
         _ => handle_404().await,
     };
@@ -114,16 +112,6 @@ async fn handle_schedule(
     let mut response = Response::new(Body::from(uri.clone()));
     create_qr_code(&uri, &address.to_string());
     response.headers_mut().insert(hyper::header::CONTENT_TYPE, "text/plain".parse()?);
-    Ok(response)
-}
-
-async fn handle_getinbound(scheduler: Scheduler) -> Result<Response<Body>, HttpError> {
-    let node_pubkey = scheduler.lnd().get_info().await.expect("got info from node").uris[0].clone();
-    let refund_address =
-        scheduler.lnd().get_new_bech32_address().await.expect("got new addr from node").to_string();
-    let quote = get_quote(&node_pubkey, &refund_address).await.unwrap();
-    let mut response = Response::new(Body::from(serde_json::to_string(&quote).unwrap()));
-    response.headers_mut().insert(hyper::header::CONTENT_TYPE, "application/json".parse().unwrap());
     Ok(response)
 }
 

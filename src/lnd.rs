@@ -100,8 +100,10 @@ impl LndClient {
 
     pub async fn get_info(&self) -> Result<GetInfoResponse, LndError> {
         let mut client = self.0.lock().await;
-        let response =
-            client.lightning().get_info(tonic_lnd::lnrpc::GetInfoRequest { ..Default::default() }).await?;
+        let response = client
+            .lightning()
+            .get_info(tonic_lnd::lnrpc::GetInfoRequest { ..Default::default() })
+            .await?;
         Ok(response.into_inner())
     }
 

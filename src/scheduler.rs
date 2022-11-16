@@ -37,16 +37,17 @@ impl ScheduledChannel {
 #[derive(Clone, serde_derive::Deserialize, Debug)]
 pub struct ChannelBatch {
     channels: Vec<ScheduledChannel>,
+    wants_inbound_quote: bool,
     fee_rate: u64,
 }
 
 impl ChannelBatch {
-    pub fn new(channels: Vec<ScheduledChannel>, fee_rate: u64) -> Self {
-        Self { channels, fee_rate }
+    pub fn new(channels: Vec<ScheduledChannel>, wants_inbound_quote: bool, fee_rate: u64) -> Self {
+        Self { channels, wants_inbound_quote, fee_rate }
     }
 
     pub fn channels(&self) -> &Vec<ScheduledChannel> { &self.channels }
-
+    pub fn wants_inbound_quote(&self) -> bool { self.wants_inbound_quote }
     pub fn fee_rate(&self) -> u64 { self.fee_rate }
 }
 
@@ -256,6 +257,8 @@ impl Scheduler {
         let bitcoin_addr = self.lnd.get_new_bech32_address().await?;
 
         let required_reserve = self.lnd.required_reserve(batch.channels().len() as u32).await?;
+        let inbound_quote =
+            if batch.wants_inbound_quote() { Some(self.get_quote().await.unwrap()) } else { None };
         let pj = &ScheduledPayJoin::new(required_reserve, batch);
 
         if self.insert_payjoin(&bitcoin_addr, pj) {
@@ -266,6 +269,14 @@ impl Scheduler {
         } else {
             Err(SchedulerError::Internal("lnd provided duplicate bitcoin addresses"))
         }
+    }
+
+    async fn get_quote(&self) -> Result<crate::inbound::Quote, hyper::http::Error> {
+        let node_pubkey = self.lnd.get_info().await.expect("got info from node").uris[0].clone();
+        let refund_address =
+            self.lnd.get_new_bech32_address().await.expect("got new addr from node").to_string();
+        let quote = crate::inbound::get_quote(&node_pubkey, &refund_address).await.unwrap();
+        Ok(quote)
     }
 
     /// Given an Original PSBT request, respond with a PayJoin Proposal,
