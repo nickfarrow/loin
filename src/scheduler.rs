@@ -12,6 +12,7 @@ use tonic_lnd::lnrpc::OpenChannelRequest;
 use url::Url;
 
 use crate::args::ArgError;
+use crate::inbound::Quote;
 use crate::lnd::{LndClient, LndError};
 
 #[derive(Clone, serde_derive::Deserialize, Debug)]
@@ -59,11 +60,12 @@ pub struct ScheduledPayJoin {
     wallet_amount: bitcoin::Amount,
     channels: Vec<ScheduledChannel>,
     fee_rate: u64,
+    quote: Option<crate::inbound::Quote>,
 }
 
 impl ScheduledPayJoin {
-    pub fn new(wallet_amount: bitcoin::Amount, batch: ChannelBatch) -> Self {
-        Self { wallet_amount, channels: batch.channels().clone(), fee_rate: batch.fee_rate() }
+    pub fn new(wallet_amount: bitcoin::Amount, batch: ChannelBatch, quote: Option<crate::inbound::Quote>) -> Self {
+        Self { wallet_amount, channels: batch.channels().clone(), fee_rate: batch.fee_rate(), quote }
     }
 
     fn total_amount(&self) -> bitcoin::Amount {
@@ -258,8 +260,8 @@ impl Scheduler {
 
         let required_reserve = self.lnd.required_reserve(batch.channels().len() as u32).await?;
         let inbound_quote =
-            if batch.wants_inbound_quote() { Some(self.get_quote().await.unwrap()) } else { None };
-        let pj = &ScheduledPayJoin::new(required_reserve, batch);
+            if batch.wants_inbound_quote() { self.get_quote().await } else { None };
+        let pj = &ScheduledPayJoin::new(required_reserve, batch, inbound_quote);
 
         if self.insert_payjoin(&bitcoin_addr, pj) {
             Ok((
@@ -271,12 +273,14 @@ impl Scheduler {
         }
     }
 
-    async fn get_quote(&self) -> Result<crate::inbound::Quote, hyper::http::Error> {
+    /// Get a quote for an inbound channel from the nolooking service.
+    /// If the service is unavailable, just return None.
+    async fn get_quote(&self) -> Option<crate::inbound::Quote> {
         let node_pubkey = self.lnd.get_info().await.expect("got info from node").uris[0].clone();
         let refund_address =
             self.lnd.get_new_bech32_address().await.expect("got new addr from node").to_string();
         let quote = crate::inbound::get_quote(&node_pubkey, &refund_address).await.unwrap();
-        Ok(quote)
+        Some(quote)
     }
 
     /// Given an Original PSBT request, respond with a PayJoin Proposal,
