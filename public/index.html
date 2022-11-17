@@ -30,6 +30,11 @@
 				x-flex direction="column">
 				<fieldset>
 					<legend>Queue Channels to Open</legend>
+					<div>
+						<label for="fee_rate">Maximum fee rate (sats/vB)</label>
+						<input type="number" name="fee_rate" id="feerate" value="1" min="1"><!-- /schedule api accepts u64 -->
+					</div>
+					<br>
 					<x-grid columns=2>
 						<label id="destinationLabel" span=1>Destination Node</label><label id="capacityLabel" span=1>Channel Capacity (sats)</label>
 					</x-grid>
@@ -46,10 +51,6 @@
 						</x-flex>
 					</p>
 				</fieldset>
-				<div>
-					<label for="fee_rate">Maximum fee rate (sats/vB)</label>
-					<input type="number" name="fee_rate" id="feerate" value="1" min="1"><!-- /schedule api accepts u64 -->
-				</div>
 				<div id="queue">
 					<x-grid columns=2>
 						<button type="submit" class="float-right" span="2">Generate Funding Request</button>
