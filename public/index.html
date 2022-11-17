@@ -29,12 +29,14 @@
 			<form action="/schedule" method="post" enctype="application/x-www-form-urlencoded"
 				x-flex direction="column">
 				<fieldset>
-					<legend>Queue Channels to Open</legend>
+					<legend>Channel Config</legend>
 					<div>
 						<label for="fee_rate">Maximum fee rate (sats/vB)</label>
 						<input type="number" name="fee_rate" id="feerate" value="1" min="1"><!-- /schedule api accepts u64 -->
 					</div>
 					<br>
+				</fieldset>
+				<fieldset>
 					<legend>Queue Inbound Channel</legend>
 					<x-flex>
 						<label for="inboundCapacity">My receiving capacity (sats)</label>
