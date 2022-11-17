@@ -30,9 +30,11 @@
 				x-flex direction="column">
 				<fieldset>
 					<legend>Queue Channels to Open</legend>
+					<x-grid columns=2>
+						<label id="destinationLabel" span=1>Destination Node</label><label id="capacityLabel" span=1>Channel Capacity (sats)</label>
+					</x-grid>
 					<!-- channels -->
 					<x-grid columns=2 id="channels">
-						<label id="destinationLabel" span=1>Destination Node</label><label id="capacityLabel" span=1>Channel Capacity (sats)</label>
 						<input type="text" name="channels[0][node]" aria-labelledby="destinationLabel" placeholder="node@host:port" required>
 						<!-- LND enforces minimum 20k sats channel -->
 						<input type="number" id="input_sats" name="channels[0][amount]" min="20000" step="1" aria-labelledby="capacityLabel" required>
@@ -67,7 +69,7 @@
 			function add_channel() {
 				let channels = document.getElementById("channels");
 				let div = document.createElement('div');
-				div.innerHTML = `<input type="text" name="channels[${channels.length + 1}][node]" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${channels.length + 1}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
+				div.innerHTML = `<input type="text" name="channels[${channels.children.length/2}][node]" aria-labelledby="destinationLabel" placeholder="node@host:port" span="1" required><input type="number" name="channels[${channels.children.length/2}][amount]" min="20000" step="1" aria-labelledby="capacityLabel" span="1" required>`;
 				channels.appendChild(div.firstChild);
 				channels.appendChild(div.lastChild);
 			}
