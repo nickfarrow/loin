@@ -124,13 +124,10 @@
 
 			function remove_channel() {
 				let channels = document.getElementById("channels");
-				let channelInputs = channels.getElementsByTagName("input");
-				if (channelInputs.length <= 2 ) {
-					// length <= [node id, channel capacity]
-					return;
+				if (channels.children.length > 2) {
+					channels.removeChild(channels.lastElementChild);
+					channels.removeChild(channels.lastElementChild);
 				}
-				channels.removeChild(channels.children[channels.children.length - 1]);
-				channels.removeChild(channels.children[channels.children.length - 2]);
 			}
 
 			document.querySelector("form").addEventListener("submit", async (event) => {
